@@ -7,13 +7,14 @@ from tqdm import tqdm
 import time
 
 def setup_credentials(index_name: str = "example-trial"):
-    pinecone.init(api_key="2e416414-ac9b-4231-a06c-ff1fc3d40b30", environment="us-west1-gcp")
+    pinecone.init(api_key="4bdfcfb1-fbce-4b38-be35-080b6c96dce4", environment="us-west1-gcp")
 
     if index_name in pinecone.list_indexes():
         pinecone.delete_index("example-trial")
 
     pinecone.create_index("example-trial", dimension=384)
 
+i = 0
 class Batch_generator:
     
     def __init__(self, batch_size: int = 32) -> None:
@@ -27,6 +28,9 @@ class Batch_generator:
 
         else:
             for chunk in np.array_split(data_list, splits):
+                global i
+                print(i)
+                i+= 1
                 yield chunk
     
     def splits_num(self, elements: int) -> int:
@@ -68,64 +72,62 @@ class Embedder:
                 vecs.append((vec_name, vec_values, new_meta_data))
                 return vecs
 
-            print(txt_type)
-            print(meta_data)
-            print('')
+            
             vec_name = ('vec_{0}_{1}_{2}_{3}'.format(doc_id, txt_type, par_id, quote_idx))
             vecs.append((vec_name, vec_values, meta_data))
 
         return vecs
 
-    def get_embedding(self, corpus: dict) -> list :
+    def get_embedding(self, doc: dict) -> list :
 
-        for doc in corpus:
+        # for doc in corpus:
             
-            doc_topics = doc['topics']
+        doc_topics = doc['topics']
 
-            meta_data = {
-                'doc_id' : doc['ID'],
-                'date': doc['date_publish'],
-                'journal': doc['source_domain'],
-                'url': doc['url']
-            }
+        meta_data = {
+            'doc_id' : doc['ID'],
+            'date': doc['date_publish'],
+            'journal': doc['source_domain'],
+            'url': doc['url']
+        }
 
-            title = doc['title']
-            titles_embedding = config.model.encode(title)
-            self.titles_vect = self.get_vec(titles_embedding, meta_data['doc_id'], meta_data, 'title')
-            
-            self.source_vec, self.quotes_vect, self.sum_quote = [], [], []
-            for i, par in enumerate(doc['linked_entites']):
-                if par:
-                    for j, quote in enumerate(par):
+        title = doc['title']
+        titles_embedding = config.model.encode(title)
+        self.titles_vect = self.get_vec(titles_embedding, meta_data['doc_id'], meta_data, 'title')
+        
+        self.source_vec, self.quotes_vect, self.sum_quote = [], [], []
+        for i, par in enumerate(doc['linked_entites']):
+            if par:
+                for j, quote in enumerate(par):
 
-                        em_src = config.model.encode(quote['Speaker'])
-                        l1 = self.get_vec(em_src, meta_data['doc_id'], meta_data, 'sources', i, j)
-                        self.source_vec.extend(l1)
+                    em_src = config.model.encode(quote['Speaker'])
+                    l1 = self.get_vec(em_src, meta_data['doc_id'], meta_data, 'sources', i, j)
+                    self.source_vec.extend(l1)
 
-                        em_q = config.model.encode(quote['Quote'])
-                        l2 = self.get_vec(em_q, meta_data['doc_id'], meta_data, 'quotes', i, j, quote['Speaker'])
-                        self.quotes_vect.extend(l2)
+                    em_q = config.model.encode(quote['Quote'])
+                    l2 = self.get_vec(em_q, meta_data['doc_id'], meta_data, 'quotes', i, j, quote['Speaker'])
+                    self.quotes_vect.extend(l2)
 
-                        em_q_sum = config.model.encode(quote["Quote_summarization"])
-                        l3 = self.get_vec(em_q_sum, meta_data['doc_id'], meta_data, 'quote_sum', i, j, quote['Speaker'])
-                        self.sum_quote.extend(l3)
+                    em_q_sum = config.model.encode(quote["Quote_summarization"])
+                    l3 = self.get_vec(em_q_sum, meta_data['doc_id'], meta_data, 'quote_sum', i, j, quote['Speaker'])
+                    self.sum_quote.extend(l3)
 
-            #print(source_vec)
-            main_text = doc['maintext']
-            embed_main_text = config.model.encode(main_text)
-            self.maintext_vect = self.get_vec(embed_main_text, meta_data['doc_id'], meta_data, 'maintext')
+        #print(source_vec)
+        main_text = doc['maintext']
+        embed_main_text = config.model.encode(main_text)
+        self.maintext_vect = self.get_vec(embed_main_text, meta_data['doc_id'], meta_data, 'maintext')
 
-            paragraphs = doc['paragraphs']
-            embed_paragraphs = config.model.encode(paragraphs)
-            self.paragraphs_vect = self.get_vec(embed_paragraphs, meta_data['doc_id'], meta_data, 'paragraphs')
+        paragraphs = doc['paragraphs']
+        embed_paragraphs = config.model.encode(paragraphs)
+        self.paragraphs_vect = self.get_vec(embed_paragraphs, meta_data['doc_id'], meta_data, 'paragraphs')
 
-            main_sum = doc['maintext_summerization']
-            embed_main_sum = config.model.encode(main_sum)
-            self.main_sum_vec = self.get_vec(embed_main_sum, meta_data['doc_id'], meta_data, 'main_sum')
+        main_sum = doc['maintext_summerization']
+        embed_main_sum = config.model.encode(main_sum)
+        self.main_sum_vec = self.get_vec(embed_main_sum, meta_data['doc_id'], meta_data, 'main_sum')
 
-            par_sum = doc['paragraphs_summerization']
-            embed_par_sum = config.model.encode(par_sum)
-            self.par_sum_vec = self.get_vec(embed_par_sum, meta_data['doc_id'], meta_data, 'par_sum')
+        par_sum = doc['paragraphs_summerization']
+        embed_par_sum = config.model.encode(par_sum)
+        self.par_sum_vec = self.get_vec(embed_par_sum, meta_data['doc_id'], meta_data, 'par_sum')
 
 
             
@@ -133,13 +135,27 @@ class Embedder:
 
         return self.titles_vect, self.maintext_vect, self.paragraphs_vect, self.source_vec, self.quotes_vect, self.sum_quote, self.main_sum_vec, self.par_sum_vec
 
-def create_vector_space(vectors: list, name_space:str):
-    index = pinecone.Index("example-trial")
+def create_vector_space(vectors: list, name_space:str, index):
+    
     index.upsert(
         vectors = vectors,
         namespace = name_space
     )
     return index
+
+import itertools
+
+def chunks(iterable, batch_size=1):
+    """A helper function to break an iterable into chunks of size batch_size."""
+    it = iter(iterable)
+    chunk = tuple(itertools.islice(it, batch_size))
+    while chunk:
+        print(chunk)
+        yield chunk
+        chunk = tuple(itertools.islice(it, batch_size))
+
+
+
 
 class Ingester:
 
@@ -147,7 +163,8 @@ class Ingester:
         setup_credentials()
         with open(json_file_path, encoding='utf-8', errors='ignore') as json_doc:
             self.corpus = json.load(json_doc, strict=False)
-
+            print(len(self.corpus))
+            print("Corpus size")
         self.title_namespace = 'titles'
         self.maintext_namespace = 'maintext'
         self.paragraphs_namespace = 'paragraphs'
@@ -171,22 +188,28 @@ class Ingester:
         self.vector_space_creator = create_vector_space
 
     def ingest(self):
-        for batched_data in tqdm(self.batch_gen(self.corpus)):
-            all_vecs = self.embedder.get_embedding(batched_data)
-
-            for i, name_space in enumerate(self.lst_name_spaces):
+        index = pinecone.Index("example-trial")
+        #for batched_data in self.batch_gen(self.corpus):
+        #for batched_data in self.corpus:
+        for doc in chunks(self.corpus):
+            all_vecs = self.embedder.get_embedding(doc[0])
+            print(len(all_vecs))
+            #try:
+            i = 0
+            for vec in chunks(all_vecs):
                 print('+++++++ Starting Ingestion +++++++')
-                #try:
-                index = self.vector_space_creator(all_vecs[i], name_space= name_space)
+                index = self.vector_space_creator(vec[0], name_space= self.lst_name_spaces[i], index= index)
+                time.sleep(2)
                 print(index.describe_index_stats())
-                print("Done ingesting in {0} name space".format(name_space))
+                print("Done ingesting in {0} name space".format(self.lst_name_spaces[i]))
                 print('+++++++ Ingestion Done +++++++')
-
+                i += 1
                 # except:
-                #     print("------- ERROR While Ingesting the data -------")
+            #     print("------- ERROR While Ingesting the data -------")
+
         return index
 
-ingester_obj = Ingester('./new_data_v7.json', batch_size= 1)
+ingester_obj = Ingester('./new_data_v7.json', batch_size= 12)
 index = ingester_obj.ingest()
 print(index.describe_index_stats())
 

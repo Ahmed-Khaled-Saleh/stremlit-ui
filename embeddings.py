@@ -221,12 +221,12 @@ class Ingester:
             all_vecs = self.embedder.get_embedding(doc)
 
             for i, vec in enumerate(all_vecs):
-                d={}
-                d['id'] = vec[0][0]
-                d['metadata'] = vec[0][2]
-                d['values'] = vec[0][1]
-                lst_dicts[i].append(d)
-            break
+                for v in vec:
+                    d={}
+                    d['id'] = v[0]
+                    d['metadata'] = v[2]
+                    d['values'] = v[1]
+                    lst_dicts[i].append(d)
 
         for i, name_space in enumerate(self.lst_name_spaces):
             with open(f"{name_space}.json", "w",encoding='utf-8') as f:

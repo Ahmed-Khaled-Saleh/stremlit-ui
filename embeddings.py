@@ -65,11 +65,11 @@ class Embedder:
                 par_id = i
             
             if txt_type == 'quotes':
-                new_meta_data = dict(meta_data)
-                new_meta_data['source'] = speaker_name
+                self.new_meta_data = dict(meta_data)
+                self.new_meta_data['source'] = speaker_name
 
                 vec_name = ('vec_{0}_{1}_{2}_{3}'.format(doc_id, txt_type, par_id, quote_idx))
-                vecs.append((vec_name, vec_values, new_meta_data))
+                vecs.append((vec_name, vec_values, self.new_meta_data))
                 return vecs
 
             
@@ -84,7 +84,7 @@ class Embedder:
             
         doc_topics = doc['topics']
 
-        meta_data = {
+        self.meta_data = {
             'doc_id' : doc['ID'],
             'date': doc['date_publish'],
             'journal': doc['source_domain'],
@@ -93,43 +93,46 @@ class Embedder:
 
         title = doc['title']
         titles_embedding = config.model.encode(title)
-        self.titles_vect = self.get_vec(titles_embedding, meta_data['doc_id'], meta_data, 'title')
+        self.titles_vect = self.get_vec(titles_embedding, self.meta_data['doc_id'], self.meta_data, 'title')
         
         self.source_vec, self.quotes_vect, self.sum_quote = [], [], []
         for i, par in enumerate(doc['linked_entites']):
-            if par:
-                for j, quote in enumerate(par):
+            # if par:
+            for j, quote in enumerate(par):
 
-                    em_src = config.model.encode(quote['Speaker'])
-                    l1 = self.get_vec(em_src, meta_data['doc_id'], meta_data, 'sources', i, j)
-                    self.source_vec.extend(l1)
+                em_src = config.model.encode(quote['Speaker'])
+                l1 = self.get_vec(em_src, self.meta_data['doc_id'], self.meta_data, 'sources', i, j)
+                self.source_vec.extend(l1)
 
-                    em_q = config.model.encode(quote['Quote'])
-                    l2 = self.get_vec(em_q, meta_data['doc_id'], meta_data, 'quotes', i, j, quote['Speaker'])
-                    self.quotes_vect.extend(l2)
+                em_q = config.model.encode(quote['Quote'])
+                l2 = self.get_vec(em_q, self.meta_data['doc_id'], self.meta_data, 'quotes', i, j, quote['Speaker'])
+                self.quotes_vect.extend(l2)
 
-                    em_q_sum = config.model.encode(quote["Quote_summarization"])
-                    l3 = self.get_vec(em_q_sum, meta_data['doc_id'], meta_data, 'quote_sum', i, j, quote['Speaker'])
-                    self.sum_quote.extend(l3)
+                em_q_sum = config.model.encode(quote["Quote_summarization"])
+                l3 = self.get_vec(em_q_sum, self.meta_data['doc_id'], self.meta_data, 'quote_sum', i, j, quote['Speaker'])
+                self.sum_quote.extend(l3)
 
         #print(source_vec)
         main_text = doc['maintext']
         embed_main_text = config.model.encode(main_text)
-        self.maintext_vect = self.get_vec(embed_main_text, meta_data['doc_id'], meta_data, 'maintext')
+        self.maintext_vect = self.get_vec(embed_main_text, self.meta_data['doc_id'], self.meta_data, 'maintext')
 
         paragraphs = doc['paragraphs']
         embed_paragraphs = config.model.encode(paragraphs)
-        self.paragraphs_vect = self.get_vec(embed_paragraphs, meta_data['doc_id'], meta_data, 'paragraphs')
+        self.paragraphs_vect = self.get_vec(embed_paragraphs, self.meta_data['doc_id'], self.meta_data, 'paragraphs')
 
         main_sum = doc['maintext_summerization']
         embed_main_sum = config.model.encode(main_sum)
-        self.main_sum_vec = self.get_vec(embed_main_sum, meta_data['doc_id'], meta_data, 'main_sum')
+        self.main_sum_vec = self.get_vec(embed_main_sum, self.meta_data['doc_id'], self.meta_data, 'main_sum')
 
         par_sum = doc['paragraphs_summerization']
         embed_par_sum = config.model.encode(par_sum)
-        self.par_sum_vec = self.get_vec(embed_par_sum, meta_data['doc_id'], meta_data, 'par_sum')
+        self.par_sum_vec = self.get_vec(embed_par_sum, self.meta_data['doc_id'], self.meta_data, 'par_sum')
 
 
+        ll = [self.titles_vect, self.maintext_vect, self.paragraphs_vect, self.source_vec, self.quotes_vect, self.sum_quote, self.main_sum_vec, self.par_sum_vec]
+        for i in ll:
+            print(len(i))
             
 
 
@@ -192,7 +195,7 @@ class Ingester:
         #for batched_data in self.batch_gen(self.corpus):
         #for batched_data in self.corpus:
         for doc in chunks(self.corpus):
-            all_vecs = self.embedder.get_embedding(doc[0])
+            all_vecs = self.embedder.get_embedding(doc)
             print(len(all_vecs))
             #try:
             i = 0
@@ -209,9 +212,31 @@ class Ingester:
 
         return index
 
+    def new_ingest(self):
+
+        
+        
+        lst_dicts = {i:[] for i in range(len(self.lst_name_spaces))}
+        for doc in self.corpus:
+            all_vecs = self.embedder.get_embedding(doc)
+
+            for i, vec in enumerate(all_vecs):
+                d={}
+                d['id'] = vec[0][0]
+                d['metadata'] = vec[0][2]
+                d['values'] = vec[0][1]
+                lst_dicts[i].append(d)
+            break
+
+        for i, name_space in enumerate(self.lst_name_spaces):
+            with open(f"{name_space}.json", "w",encoding='utf-8') as f:
+                print("*** saving in name_space{0}".format(name_space))
+                json.dump({'vectors': lst_dicts[i], "namespace": name_space}, f, ensure_ascii=False)
+                
+        # return json.dumps({'values': lst_dicts})
+
 ingester_obj = Ingester('./new_data_v7.json', batch_size= 12)
-index = ingester_obj.ingest()
-print(index.describe_index_stats())
+print(ingester_obj.new_ingest())
 
 
 # pinecone.init(api_key="4bdfcfb1-fbce-4b38-be35-080b6c96dce4", environment="us-west1-gcp")
